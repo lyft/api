@@ -18,6 +18,7 @@ package v1
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/golang/protobuf/jsonpb"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -4175,7 +4176,7 @@ const (
 type ResourceList map[ResourceName]resource.Quantity
 
 func (r *ResourceList) UnmarshalJSONPB(u *jsonpb.Unmarshaler, value []byte) error {
-	var m map[string]string
+	var m map[string]interface{}
 	err := json.Unmarshal(value, &m)
 	if err != nil {
 		return err
@@ -4183,12 +4184,13 @@ func (r *ResourceList) UnmarshalJSONPB(u *jsonpb.Unmarshaler, value []byte) erro
 
 	resourceList := make(ResourceList)
 	for resourceName, quantity := range m {
-		quantityPB := resource.Quantity{}
-		err := u.Unmarshal(strings.NewReader(quantity), &quantityPB)
-		if err != nil {
-			return err
+		quantityMap := quantity.(map[string]interface{})
+		quantityIface, ok := quantityMap["string"]
+		if !ok {
+			return errors.New("missing string key in quantity")
 		}
-		resourceList[ResourceName(resourceName)] = quantityPB
+
+		resourceList[ResourceName(resourceName)] = resource.MustParse(quantityIface.(string))
 	}
 	*r = resourceList
 	return nil
